@@ -11,7 +11,7 @@ import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import { Badge } from '../components/ui/badge'
-import { Search, ChevronLeft, ChevronRight, ExternalLink } from '../components/icons'
+import { Search, ChevronLeft, ChevronRight } from '../components/icons'
 import { DocketDetailDrawer } from '../components/DocketDetailDrawer'
 
 export default function Dockets() {

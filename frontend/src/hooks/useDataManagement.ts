@@ -51,10 +51,10 @@ export const useDownloadStatus = (date: string, enabled: boolean = true) => {
  */
 export const useStartDownload = () => {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: (request: DownloadRequest) => dataManagementApi.startDownload(request),
-    onSuccess: (data, variables) => {
+    onSuccess: (_data, variables) => {
       // Invalidate download status query
       queryClient.invalidateQueries({ queryKey: ['download-status', variables.date] })
       // Invalidate datasets query
@@ -87,10 +87,10 @@ export const useImportStatus = (date: string, enabled: boolean = true) => {
  */
 export const useStartImport = () => {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
     mutationFn: (request: ImportRequest) => dataManagementApi.startImport(request),
-    onSuccess: (data, variables) => {
+    onSuccess: (_data, variables) => {
       // Invalidate import status query
       queryClient.invalidateQueries({ queryKey: ['import-status', variables.date] })
       // Invalidate database status

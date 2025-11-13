@@ -9,7 +9,6 @@ import { getOpinion, getOpinionDocket } from '../services/opinions'
 import { getCitationStats, getCitingOpinions, getCitedOpinions } from '../services/citations'
 import { Drawer, DrawerSection, DrawerField } from './ui/drawer'
 import { Badge } from './ui/badge'
-import { Button } from './ui/button'
 import { ChevronDown, ChevronUp } from './icons'
 
 interface OpinionDetailDrawerProps {
