@@ -1018,3 +1018,48 @@ def get_import_logs(lines: int = 100):
     except Exception as e:
         logger.error(f"Failed to read import logs: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to read logs: {str(e)}")
+
+
+@router.post("/import-citations-parallel")
+def import_citations_parallel():
+    """
+    Start citations import in parallel with the already-running dockets import.
+
+    This endpoint starts search_opinionscited import which has no FK dependencies
+    and can run simultaneously with dockets for faster completion.
+    """
+    import subprocess
+    from pathlib import Path
+
+    try:
+        script_path = "/app/import_citations_parallel.py"
+        log_path = "/app/data/import_citations.log"
+
+        # Verify script exists
+        if not Path(script_path).exists():
+            raise FileNotFoundError(f"Citations import script not found: {script_path}")
+
+        # Use nohup to run in background
+        cmd = f"nohup python3 {script_path} > {log_path} 2>&1 &"
+
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+
+        logger.info(f"Started parallel citations import (command: {cmd})")
+        logger.info(f"Logs will be written to: {log_path}")
+
+        return {
+            "status": "started",
+            "message": "Citations import started in parallel with dockets",
+            "log_file": log_path,
+            "note": "This will run alongside the dockets import for faster completion"
+        }
+    except Exception as e:
+        logger.error(f"Failed to start parallel citations import: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to start import: {str(e)}")
