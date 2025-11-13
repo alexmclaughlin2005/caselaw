@@ -5,7 +5,7 @@
  */
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { searchOpinions, OpinionSearchParams } from '../services/opinions'
+import { searchOpinions, OpinionSearchParams, OpinionListItem } from '../services/opinions'
 import { Input } from '../components/ui/input'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -40,7 +40,6 @@ export default function Opinions() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['opinions', searchParams],
     queryFn: () => searchOpinions(searchParams),
-    keepPreviousData: true,
   })
 
   const handleSearch = (e: React.FormEvent) => {
@@ -176,7 +175,7 @@ export default function Opinions() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {data.items.map((opinion) => (
+                    {data.items.map((opinion: OpinionListItem) => (
                       <TableRow key={opinion.id}>
                         <TableCell>
                           <div className="space-y-1">

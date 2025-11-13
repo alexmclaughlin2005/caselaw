@@ -9,7 +9,6 @@ import { Button } from '../components/common/Button'
 import { Card } from '../components/common/Card'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'
 import { ProgressBar } from '../components/common/ProgressBar'
-import type { DatasetInfo } from '../types/dataManagement'
 
 const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return '0 B'
