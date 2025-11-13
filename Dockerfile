@@ -18,5 +18,14 @@ COPY backend/ .
 # Expose port
 EXPOSE 8000
 
-# Default command (can be overridden in railway.json)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Create startup script
+RUN echo '#!/bin/bash\n\
+set -e\n\
+echo "Running database migrations..."\n\
+alembic upgrade head\n\
+echo "Starting uvicorn server..."\n\
+exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --log-level info\n\
+' > /app/start.sh && chmod +x /app/start.sh
+
+# Default command
+CMD ["/app/start.sh"]
