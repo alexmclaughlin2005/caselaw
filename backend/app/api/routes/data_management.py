@@ -586,7 +586,18 @@ async def import_people_database_tables(date: str):
             logger.info(f"[{table_name}] Starting import to database")
             session = SessionLocal()
             try:
-                row_count = importer.import_csv(table_name, downloaded_path, session)
+                # Use pandas import with self-referential FK skip for people_db_person
+                if table_name == "people_db_person":
+                    logger.info(f"[{table_name}] Using pandas import with self-referential FK handling")
+                    row_count = importer.import_csv_pandas(
+                        table_name,
+                        downloaded_path,
+                        session,
+                        skip_self_referential_fk=True
+                    )
+                else:
+                    row_count = importer.import_csv(table_name, downloaded_path, session)
+
                 logger.info(f"[{table_name}] ✓ Import complete: {row_count:,} rows")
                 return {
                     "table": table_name,

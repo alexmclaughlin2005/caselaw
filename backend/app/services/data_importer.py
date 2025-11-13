@@ -62,7 +62,8 @@ class DataImporter:
         table_name: str,
         csv_path: Path,
         db_session: Optional[Session] = None,
-        chunk_size: int = 100000
+        chunk_size: int = 100000,
+        skip_self_referential_fk: bool = False
     ) -> int:
         """
         Import CSV using pandas with robust error handling for malformed CSVs.
@@ -75,6 +76,7 @@ class DataImporter:
             csv_path: Path to CSV file
             db_session: Optional database session
             chunk_size: Rows per chunk (default 100k)
+            skip_self_referential_fk: If True, skip self-referential FK columns during import
 
         Returns:
             Number of rows imported
@@ -141,6 +143,11 @@ class DataImporter:
 
                 # Filter to only columns that exist in database
                 available_cols = [col for col in chunk_df.columns if col in db_columns]
+
+                # Skip self-referential foreign key columns if requested
+                if skip_self_referential_fk and table_name == "people_db_person":
+                    available_cols = [col for col in available_cols if col != "is_alias_of_id"]
+
                 chunk_df = chunk_df[available_cols]
 
                 # Replace NaN and empty strings with None for proper NULL handling
