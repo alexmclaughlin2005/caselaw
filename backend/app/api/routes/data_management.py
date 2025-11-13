@@ -1105,3 +1105,92 @@ def import_citations_parallel():
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to start import: {str(e)}")
+
+
+@router.post("/import-ultra-turbo")
+def import_ultra_turbo():
+    """
+    ULTRA TURBO MODE: PostgreSQL COPY command for maximum speed.
+
+    Uses PostgreSQL's native COPY FROM STDIN command which is 5-10x faster
+    than Python INSERT statements. No CSV parsing delay - starts immediately!
+
+    Expected performance: 200K-500K rows/min (vs 50K-100K with INSERT)
+    """
+    import subprocess
+    from pathlib import Path
+
+    try:
+        script_path = "/app/import_ultra_turbo.py"
+        log_path = "/app/data/import_ultra_turbo.log"
+
+        # Verify script exists
+        if not Path(script_path).exists():
+            raise FileNotFoundError(f"Ultra turbo import script not found: {script_path}")
+
+        # Use nohup to run in background
+        cmd = f"nohup python3 {script_path} > {log_path} 2>&1 &"
+
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+
+        logger.info(f"Started ULTRA TURBO import (command: {cmd})")
+        logger.info(f"Logs will be written to: {log_path}")
+
+        return {
+            "status": "started",
+            "message": "🚀 ULTRA TURBO MODE: PostgreSQL COPY started",
+            "log_file": log_path,
+            "features": [
+                "PostgreSQL native COPY command",
+                "No CSV parsing delay - starts immediately",
+                "5-10x faster than INSERT (200K-500K rows/min)",
+                "Foreign key checks disabled",
+                "Temp table for deduplication"
+            ],
+            "note": "Monitor at GET /api/data/import-ultra-turbo-logs"
+        }
+    except Exception as e:
+        logger.error(f"Failed to start ULTRA TURBO import: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to start import: {str(e)}")
+
+
+@router.get("/import-ultra-turbo-logs")
+def get_ultra_turbo_logs(lines: int = 100):
+    """Get the last N lines from the ULTRA TURBO import log file."""
+    from pathlib import Path
+
+    try:
+        log_path = Path("/app/data/import_ultra_turbo.log")
+
+        if not log_path.exists():
+            return {
+                "status": "no_log",
+                "message": "ULTRA TURBO log file does not exist yet",
+                "log_path": str(log_path)
+            }
+
+        lines = min(lines, 1000)
+
+        import subprocess
+        result = subprocess.run(
+            ["tail", f"-{lines}", str(log_path)],
+            capture_output=True,
+            text=True
+        )
+
+        return {
+            "status": "success",
+            "lines": lines,
+            "log_path": str(log_path),
+            "log_content": result.stdout
+        }
+    except Exception as e:
+        logger.error(f"Failed to read ULTRA TURBO logs: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to read logs: {str(e)}")

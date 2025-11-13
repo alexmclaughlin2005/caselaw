@@ -19,6 +19,7 @@ COPY backend/ .
 COPY import_directly.py /app/import_directly.py
 COPY import_citations_parallel.py /app/import_citations_parallel.py
 COPY import_parallel.py /app/import_parallel.py
+COPY import_ultra_turbo.py /app/import_ultra_turbo.py
 
 # Expose port
 EXPOSE 8000
