@@ -7,24 +7,27 @@
 - [x] Railway PostgreSQL database created
 - [x] Backend .env file configured
 - [x] Config.py updated for Railway compatibility
+- [x] Railway backend service deployed from GitHub
+- [x] Railway environment variables configured
+- [x] Railway volume created and mounted at /app/data
 
-### 🔄 In Progress - Railway Backend
+### 🔄 In Progress - Verify Railway Deployment
 
-#### Step 1: Deploy Backend to Railway
+#### Step 1: Deploy Backend to Railway ✅
 1. Go to: https://railway.app/dashboard
 2. Click **"+ New"** → **"Deploy from GitHub repo"**
 3. Select repository: **`alexmclaughlin2005/caselaw`**
 4. Railway will detect Dockerfile automatically
 5. Click **"Deploy"**
 
-#### Step 2: Link PostgreSQL to Backend
+#### Step 2: Link PostgreSQL to Backend ✅
 1. In Railway dashboard, click on your backend service
 2. Go to **"Variables"** tab
 3. Click **"+ New Variable"** → **"Add Reference"**
 4. Select your **PostgreSQL** database
 5. This shares `DATABASE_URL` automatically
 
-#### Step 3: Add Additional Environment Variables
+#### Step 3: Add Additional Environment Variables ✅
 In backend service → **Variables** tab, add:
 
 ```env
@@ -33,15 +36,26 @@ LOG_LEVEL=INFO
 ENVIRONMENT=production
 ALLOWED_ORIGINS=http://localhost:3000
 PORT=8000
+S3_BUCKET_NAME=com-courtlistener-storage
+S3_PREFIX=bulk-data/
 ```
 
-#### Step 4: Wait for Deployment
+#### Step 4: Create Railway Volume ✅
+1. In backend service, go to **"Settings"** or **"Volumes"** tab
+2. Click **"+ New Volume"**
+3. Configure:
+   - **Mount Path**: `/app/data`
+   - **Size**: 10-20 GB (expandable later)
+4. Click **"Create"**
+5. Service will automatically redeploy with volume attached
+
+#### Step 5: Wait for Deployment
 - Railway will build Docker image (~2-3 minutes)
-- Run migrations automatically (via Dockerfile CMD)
+- Run migrations automatically (via railway.json startCommand)
 - Start the FastAPI server
 - You'll get a URL like: `https://caselaw-production.up.railway.app`
 
-#### Step 5: Verify Backend
+#### Step 6: Verify Backend 🔄 CURRENT STEP
 Once deployed, test:
 ```bash
 curl https://your-railway-url.railway.app/health
