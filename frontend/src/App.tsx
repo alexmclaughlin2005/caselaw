@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react
 import DataManagement from './pages/DataManagement'
 import Dockets from './pages/Dockets'
 import Opinions from './pages/Opinions'
+import ImportMonitor from './pages/ImportMonitor'
 
 function Navigation() {
   const location = useLocation()
@@ -11,6 +12,7 @@ function Navigation() {
     { path: '/dockets', label: 'Dockets' },
     { path: '/opinions', label: 'Opinions' },
     { path: '/data', label: 'Data Management' },
+    { path: '/monitor', label: 'Import Monitor' },
   ]
   
   return (
@@ -82,6 +84,7 @@ function App() {
             <Route path="/dockets" element={<Dockets />} />
             <Route path="/opinions" element={<Opinions />} />
             <Route path="/data" element={<DataManagement />} />
+            <Route path="/monitor" element={<ImportMonitor />} />
           </Routes>
         </main>
       </div>
