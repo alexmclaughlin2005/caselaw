@@ -32,7 +32,7 @@ async def health_check():
     return {"status": "healthy", "service": "courtlistener-api"}
 
 # Include API routes
-from app.api.routes import data_management, dockets, opinions, citations, monitoring
+from app.api.routes import data_management, dockets, opinions, citations, monitoring, database
 # from app.api.routes import people, positions, schools
 
 app.include_router(data_management.router, prefix="/api/data", tags=["data"])
@@ -40,6 +40,7 @@ app.include_router(dockets.router, prefix="/api/dockets", tags=["dockets"])
 app.include_router(opinions.router, prefix="/api/opinions", tags=["opinions"])
 app.include_router(citations.router, prefix="/api/citations", tags=["citations"])
 app.include_router(monitoring.router, prefix="/api/monitoring", tags=["monitoring"])
+app.include_router(database.router, prefix="/api/database", tags=["database"])
 # app.include_router(people.router, prefix="/api/people", tags=["people"])
 # app.include_router(positions.router, prefix="/api/positions", tags=["positions"])
 # app.include_router(schools.router, prefix="/api/schools", tags=["schools"])
