@@ -4,7 +4,7 @@
 
 **Objective**: Migrate backend processing and PostgreSQL database from local Docker to Railway platform to solve disk space constraints and improve reliability.
 
-**Current State**:
+**Current State**: (NO LONGER DOING LOCAL TO RAILWAY PUSH!!)
 - Local PostgreSQL with 43GB data (3 tables imported)
 - 77GB CSV files on local machine
 - 100% disk capacity (1.2GB free)

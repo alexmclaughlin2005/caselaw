@@ -383,9 +383,9 @@ class DataImporter:
                             session.rollback()
                             logger.warning(f"Skipping chunk {chunk_num} due to error: {str(e)[:200]}")
 
-                        # Log progress every 2 chunks (1M rows with 500k chunk size)
+                        # Log progress every chunk (500k rows) for detailed visibility
                         current_time = time.time()
-                        if chunk_num % 2 == 0:
+                        if chunk_num % 1 == 0:
                             elapsed = current_time - start_time
                             rows_per_second = total_rows_imported / elapsed if elapsed > 0 else 0
                             rows_per_minute = rows_per_second * 60

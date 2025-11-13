@@ -13,9 +13,13 @@ sys.path.insert(0, '/app')
 from app.services.s3_downloader import CourtListenerDownloader
 from app.services.data_importer import DataImporter
 from app.core.database import SessionLocal
+from sqlalchemy import text
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# TURBO MODE: Disable foreign key checks for maximum performance
+TURBO_MODE = True
 
 def main():
     """Import people database tables first, then caselaw tables."""
@@ -77,6 +81,12 @@ def main():
     # Step 2: Import caselaw tables (using already downloaded files if available)
     logger.info("\n" + "=" * 80)
     logger.info("STEP 2: IMPORTING CASELAW TABLES")
+    if TURBO_MODE:
+        logger.info("🚀 TURBO MODE ENABLED:")
+        logger.info("   ✓ Foreign key checks DISABLED")
+        logger.info("   ✓ 500K row chunks")
+        logger.info("   ✓ 5M row commits")
+        logger.info("   ✓ Maximum performance mode")
     logger.info("=" * 80)
 
     caselaw_tables = [
@@ -87,6 +97,13 @@ def main():
     ]
 
     session = SessionLocal()
+
+    # TURBO MODE: Disable foreign key checks
+    if TURBO_MODE:
+        logger.info("Disabling foreign key checks...")
+        session.execute(text("SET session_replication_role = 'replica';"))
+        session.commit()
+        logger.info("✓ Foreign key checks disabled for maximum speed")
 
     import time
     overall_start = time.time()
@@ -126,11 +143,20 @@ def main():
             traceback.print_exc()
             continue
 
+    # TURBO MODE: Re-enable foreign key checks
+    if TURBO_MODE:
+        logger.info("\nRe-enabling foreign key checks...")
+        session.execute(text("SET session_replication_role = 'origin';"))
+        session.commit()
+        logger.info("✓ Foreign key checks re-enabled")
+
     session.close()
 
     overall_elapsed = time.time() - overall_start
     logger.info("\n" + "=" * 80)
     logger.info("🎉 ALL CASELAW IMPORTS COMPLETE!")
+    if TURBO_MODE:
+        logger.info("🚀 TURBO MODE was enabled for maximum performance")
     logger.info(f"Total time: {overall_elapsed/3600:.1f} hours ({overall_elapsed/60:.1f} minutes)")
     logger.info("=" * 80)
 
