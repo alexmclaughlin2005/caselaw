@@ -5,7 +5,7 @@
  */
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { getImportProgress, getDatabaseCounts, getDatabaseActivity } from '../services/monitoring'
+import { getLiveImportStatus, getDatabaseCounts, getDatabaseActivity } from '../services/monitoring'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
@@ -14,10 +14,10 @@ import { RefreshCw, Database, Activity, Clock, TrendingUp } from '../components/
 export default function ImportMonitor() {
   const [autoRefresh, setAutoRefresh] = useState(true)
 
-  // Query for import progress (refreshes every 5 seconds if enabled)
-  const { data: progress, isLoading: progressLoading, refetch: refetchProgress } = useQuery({
-    queryKey: ['import-progress'],
-    queryFn: getImportProgress,
+  // Query for live import status (refreshes every 5 seconds if enabled)
+  const { data: liveStatus, isLoading: progressLoading, refetch: refetchProgress } = useQuery({
+    queryKey: ['live-import-status'],
+    queryFn: getLiveImportStatus,
     refetchInterval: autoRefresh ? 5000 : false,
   })
 
@@ -43,16 +43,16 @@ export default function ImportMonitor() {
 
   // Calculate estimated time remaining
   const getEstimatedTimeRemaining = () => {
-    if (!progress) return 'Calculating...'
+    if (!liveStatus) return 'Calculating...'
 
-    const { overall } = progress
-    if (overall.percentage === 0) return 'Not started'
-    if (overall.percentage >= 100) return 'Complete!'
+    const percentage = liveStatus.overall_percentage
+    if (percentage === 0) return 'Not started'
+    if (percentage >= 100) return 'Complete!'
 
     // Rough estimate: assume linear progress at current rate
     // This is a simplified calculation
-    const remainingPercentage = 100 - overall.percentage
-    const estimatedMinutes = (remainingPercentage / overall.percentage) * 120 // Assume 2 hours baseline
+    const remainingPercentage = 100 - percentage
+    const estimatedMinutes = (remainingPercentage / percentage) * 120 // Assume 2 hours baseline
 
     if (estimatedMinutes < 60) {
       return `~${Math.round(estimatedMinutes)} minutes`
@@ -61,6 +61,32 @@ export default function ImportMonitor() {
       const minutes = Math.round(estimatedMinutes % 60)
       return `~${hours}h ${minutes}m`
     }
+  }
+
+  // Get display name for table
+  const getTableDisplayName = (tableName: string) => {
+    const names: Record<string, string> = {
+      'people_db_court': 'Courts',
+      'people_db_person': 'Judges/People',
+      'search_docket': 'Dockets',
+      'search_opinioncluster': 'Opinion Clusters',
+      'search_opinionscited': 'Citations',
+      'search_parenthetical': 'Parentheticals',
+    }
+    return names[tableName] || tableName
+  }
+
+  // Sort tables: people DB first, then caselaw
+  const sortTables = (tables: Record<string, any>) => {
+    const order = [
+      'people_db_court',
+      'people_db_person',
+      'search_docket',
+      'search_opinioncluster',
+      'search_opinionscited',
+      'search_parenthetical',
+    ]
+    return order.filter(name => tables[name]).map(name => [name, tables[name]])
   }
 
   const getStatusColor = (status: string) => {
@@ -119,9 +145,13 @@ export default function ImportMonitor() {
             Overall Import Progress
           </CardTitle>
           <CardDescription>
-            {progress ? (
+            {liveStatus ? (
               <>
-                {progress.overall.current.toLocaleString()} / {progress.overall.expected.toLocaleString()} records imported
+                {liveStatus.total_records.toLocaleString()} / {liveStatus.expected_total.toLocaleString()} records imported
+                {' • '}
+                Status: {liveStatus.import_status}
+                {' • '}
+                Active queries: {liveStatus.active_queries}
                 {' • '}
                 Estimated time remaining: {getEstimatedTimeRemaining()}
               </>
@@ -131,37 +161,37 @@ export default function ImportMonitor() {
         <CardContent>
           {progressLoading ? (
             <div className="text-center py-8 text-gray-600">Loading progress...</div>
-          ) : progress ? (
+          ) : liveStatus ? (
             <div className="space-y-4">
               {/* Overall progress bar */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-gray-700">Total Progress</span>
                   <span className="text-2xl font-bold text-gray-900">
-                    {progress.overall.percentage.toFixed(1)}%
+                    {liveStatus.overall_percentage.toFixed(1)}%
                   </span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-6">
                   <div
                     className="bg-blue-600 h-6 rounded-full transition-all duration-500 flex items-center justify-center text-xs text-white font-medium"
-                    style={{ width: `${Math.min(progress.overall.percentage, 100)}%` }}
+                    style={{ width: `${Math.min(liveStatus.overall_percentage, 100)}%` }}
                   >
-                    {progress.overall.percentage > 5 && `${progress.overall.percentage.toFixed(1)}%`}
+                    {liveStatus.overall_percentage > 5 && `${liveStatus.overall_percentage.toFixed(1)}%`}
                   </div>
                 </div>
                 <div className="flex items-center justify-between mt-1 text-xs text-gray-500">
-                  <span>{progress.overall.current.toLocaleString()} records</span>
-                  <span>{progress.overall.remaining.toLocaleString()} remaining</span>
+                  <span>{liveStatus.total_records.toLocaleString()} records</span>
+                  <span>{(liveStatus.expected_total - liveStatus.total_records).toLocaleString()} remaining</span>
                 </div>
               </div>
 
               {/* Individual table progress */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                {Object.entries(progress.tables).map(([tableName, tableProgress]) => (
+                {sortTables(liveStatus.tables).map(([tableName, tableProgress]) => (
                   <div key={tableName} className="border rounded-lg p-4 bg-gray-50">
                     <div className="flex items-center justify-between mb-3">
                       <div>
-                        <h3 className="font-medium text-gray-900">{tableName}</h3>
+                        <h3 className="font-medium text-gray-900">{getTableDisplayName(tableName)}</h3>
                         <Badge variant={getStatusVariant(tableProgress.status)} className="mt-1">
                           {tableProgress.status}
                         </Badge>
@@ -186,12 +216,36 @@ export default function ImportMonitor() {
                         <span className="font-medium">Expected:</span> {tableProgress.expected.toLocaleString()}
                       </div>
                       <div className="col-span-2">
-                        <span className="font-medium">Remaining:</span> {tableProgress.remaining.toLocaleString()}
+                        <span className="font-medium">Remaining:</span> {(tableProgress.expected - tableProgress.current).toLocaleString()}
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
+
+              {/* Active Query Details */}
+              {liveStatus.query_details && liveStatus.query_details.length > 0 && (
+                <div className="mt-6">
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">Currently Importing</h4>
+                  <div className="space-y-2">
+                    {liveStatus.query_details.map((query) => (
+                      <div key={query.pid} className="bg-blue-50 border border-blue-200 rounded p-3 text-sm">
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">Table: {query.table}</Badge>
+                            <Badge variant="secondary">PID: {query.pid}</Badge>
+                          </div>
+                          <span className="text-xs text-gray-600">
+                            <Clock className="inline h-3 w-3 mr-1" />
+                            {query.duration}
+                          </span>
+                        </div>
+                        <div className="text-gray-600 font-mono text-xs break-all">{query.query}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-8 text-red-500">Failed to load progress data</div>
