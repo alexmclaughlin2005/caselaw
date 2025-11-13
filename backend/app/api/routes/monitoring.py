@@ -11,6 +11,96 @@ from app.core.database import get_db
 router = APIRouter()
 
 
+@router.get("/import/live-status")
+async def get_live_import_status(db: Session = Depends(get_db)):
+    """
+    Get real-time import status with active queries and progress estimates.
+    """
+    try:
+        # Get current counts
+        tables = {
+            "search_docket": 70000000,
+            "search_opinioncluster": 6000000,
+            "search_opinionscited": 76000000,
+            "search_parenthetical": 6000000,
+            "people_db_court": 3355,
+            "people_db_person": 16191
+        }
+
+        current_counts = {}
+        for table, expected in tables.items():
+            result = db.execute(text(f"SELECT COUNT(*) FROM {table}"))
+            current = result.scalar()
+            current_counts[table] = {
+                "current": current,
+                "expected": expected,
+                "percentage": round((current / expected * 100), 2) if expected > 0 else 100,
+                "status": "completed" if current >= expected else ("importing" if current > 0 else "pending")
+            }
+
+        # Get active queries
+        result = db.execute(text("""
+            SELECT
+                pid,
+                query,
+                state,
+                EXTRACT(EPOCH FROM (NOW() - query_start)) as duration_seconds
+            FROM pg_stat_activity
+            WHERE state = 'active'
+            AND query NOT LIKE '%pg_stat_activity%'
+            AND query NOT LIKE '%COUNT%'
+            ORDER BY query_start
+        """))
+
+        active_queries = []
+        for row in result:
+            query_text = row[1][:100] if row[1] else ""
+            # Extract table name from INSERT query
+            table_name = None
+            if "INSERT INTO" in query_text:
+                parts = query_text.split("INSERT INTO")[1].split("(")[0].strip()
+                table_name = parts.split()[0].strip('"')
+
+            active_queries.append({
+                "pid": row[0],
+                "table": table_name,
+                "query_preview": query_text,
+                "duration_seconds": round(row[3], 1) if row[3] else 0
+            })
+
+        # Calculate overall progress
+        total_current = sum(c["current"] for c in current_counts.values() if c["expected"] > 1000)
+        total_expected = sum(c["expected"] for c in current_counts.values() if c["expected"] > 1000)
+        overall_percentage = round((total_current / total_expected * 100), 2) if total_expected > 0 else 0
+
+        # Determine import status
+        if len(active_queries) > 0:
+            import_status = "importing"
+        elif overall_percentage >= 100:
+            import_status = "completed"
+        elif overall_percentage > 0:
+            import_status = "paused"
+        else:
+            import_status = "pending"
+
+        return {
+            "import_status": import_status,
+            "overall_percentage": overall_percentage,
+            "total_records": total_current,
+            "total_expected": total_expected,
+            "tables": current_counts,
+            "active_queries": len(active_queries),
+            "query_details": active_queries,
+            "timestamp": db.execute(text("SELECT NOW()")).scalar().isoformat()
+        }
+
+    except Exception as e:
+        return {
+            "error": str(e),
+            "import_status": "unknown"
+        }
+
+
 @router.get("/database/counts")
 async def get_database_counts(db: Session = Depends(get_db)):
     """
