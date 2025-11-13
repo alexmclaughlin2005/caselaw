@@ -385,7 +385,7 @@ async def start_import(request: ImportRequest):
 
 
 @router.post("/import-parallel")
-async def start_parallel_import(background_tasks: BackgroundTasks):
+async def start_parallel_import():
     """
     Start parallel import directly from S3 to Railway database.
 
@@ -393,11 +393,18 @@ async def start_parallel_import(background_tasks: BackgroundTasks):
     Much faster than sequential import or dump/restore.
     """
     try:
+        import threading
+
         # Use latest date
         date = "2025-10-31"
 
-        # Add background task for parallel import
-        background_tasks.add_task(parallel_import_from_s3, date)
+        # Start import in a daemon thread so it persists after response
+        thread = threading.Thread(
+            target=run_parallel_import_sync,
+            args=(date,),
+            daemon=False  # Keep thread alive even after response
+        )
+        thread.start()
 
         return {
             "status": "started",
@@ -407,6 +414,14 @@ async def start_parallel_import(background_tasks: BackgroundTasks):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def run_parallel_import_sync(date: str):
+    """
+    Synchronous wrapper to run async parallel import in a thread.
+    """
+    import asyncio
+    asyncio.run(parallel_import_from_s3(date))
 
 
 async def parallel_import_from_s3(date: str):
