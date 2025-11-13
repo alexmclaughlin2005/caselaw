@@ -15,6 +15,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY backend/ .
 
+# Copy import script to /app
+COPY import_directly.py /app/import_directly.py
+
 # Expose port
 EXPOSE 8000
 
