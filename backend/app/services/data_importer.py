@@ -145,8 +145,11 @@ class DataImporter:
                 available_cols = [col for col in chunk_df.columns if col in db_columns]
 
                 # Skip self-referential foreign key columns if requested
-                if skip_self_referential_fk and table_name == "people_db_person":
-                    available_cols = [col for col in available_cols if col != "is_alias_of_id"]
+                if skip_self_referential_fk:
+                    if table_name == "people_db_person":
+                        available_cols = [col for col in available_cols if col != "is_alias_of_id"]
+                    elif table_name == "people_db_court":
+                        available_cols = [col for col in available_cols if col != "parent_court_id"]
 
                 chunk_df = chunk_df[available_cols]
 

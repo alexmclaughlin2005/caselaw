@@ -651,8 +651,13 @@ def import_people_database_sync():
                         skip_self_referential_fk=True
                     )
                 elif table_name == "people_db_court":
-                    logger.info(f"[{table_name}] Using pandas import for court data")
-                    row_count = importer.import_csv_pandas(table_name, downloaded_path, session)
+                    logger.info(f"[{table_name}] Using pandas import with self-referential FK handling")
+                    row_count = importer.import_csv_pandas(
+                        table_name,
+                        downloaded_path,
+                        session,
+                        skip_self_referential_fk=True
+                    )
                 else:
                     row_count = importer.import_csv(table_name, downloaded_path, session)
 
