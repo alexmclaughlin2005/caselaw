@@ -505,6 +505,127 @@ async def parallel_import_from_s3(date: str):
     return results
 
 
+@router.post("/import-people-db")
+async def import_people_database():
+    """
+    Import people database tables (courts and people) before caselaw tables.
+
+    These tables contain foreign key dependencies required by caselaw tables:
+    - people_db_court: Required by search_docket.court_id
+    - people_db_person: Required by search_docket.assigned_to_id, referred_to_id
+
+    This should be run BEFORE import-parallel for caselaw tables.
+    """
+    try:
+        import threading
+
+        # Use latest date
+        date = "2025-10-31"
+
+        # Start import in a daemon thread
+        thread = threading.Thread(
+            target=run_people_db_import_sync,
+            args=(date,),
+            daemon=False
+        )
+        thread.start()
+
+        return {
+            "status": "started",
+            "message": f"People database import started for date {date}",
+            "date": date,
+            "tables": ["people_db_court", "people_db_person"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def run_people_db_import_sync(date: str):
+    """Synchronous wrapper to run async people DB import in a thread."""
+    import asyncio
+    asyncio.run(import_people_database_tables(date))
+
+
+async def import_people_database_tables(date: str):
+    """
+    Background task to download and import people database tables.
+    These tables MUST be imported before caselaw tables due to foreign key constraints.
+    """
+    import asyncio
+    from pathlib import Path
+    from app.core.database import SessionLocal
+
+    logger.info(f"Starting people database import from S3 for date {date}")
+
+    # Table mappings: (table_name, s3_file_name)
+    tables = [
+        ("people_db_court", f"courts-{date}.csv.bz2"),
+        ("people_db_person", f"people-db-people-{date}.csv.bz2"),
+    ]
+
+    async def download_and_import_table(table_name: str, s3_file: str):
+        """Download and import a single table."""
+        try:
+            logger.info(f"[{table_name}] Starting download from S3: {s3_file}")
+
+            # Download from S3 to Railway volume
+            from app.core.config import settings
+            data_dir = Path(settings.DATA_DIR)
+            data_dir.mkdir(parents=True, exist_ok=True)
+
+            target_path = data_dir / f"{table_name}-{date}.csv"
+            downloaded_path = downloader.download_file(
+                key=f"bulk-data/{s3_file}",
+                target_path=target_path
+            )
+
+            logger.info(f"[{table_name}] Download complete: {downloaded_path}")
+            logger.info(f"[{table_name}] File size: {downloaded_path.stat().st_size / (1024**3):.2f} GB")
+
+            # Import to database
+            logger.info(f"[{table_name}] Starting import to database")
+            session = SessionLocal()
+            try:
+                row_count = importer.import_csv(table_name, downloaded_path, session)
+                logger.info(f"[{table_name}] ✓ Import complete: {row_count:,} rows")
+                return {
+                    "table": table_name,
+                    "status": "success",
+                    "rows": row_count
+                }
+            finally:
+                session.close()
+
+        except Exception as e:
+            logger.error(f"[{table_name}] Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                "table": table_name,
+                "status": "error",
+                "error": str(e)
+            }
+
+    # Run all imports in parallel
+    tasks = [
+        download_and_import_table(table_name, s3_file)
+        for table_name, s3_file in tables
+    ]
+
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    logger.info("=" * 80)
+    logger.info("PEOPLE DATABASE IMPORT COMPLETE")
+    logger.info("=" * 80)
+    for result in results:
+        if isinstance(result, dict):
+            logger.info(f"{result['table']}: {result['status']}")
+        else:
+            logger.error(f"Unexpected result: {result}")
+
+    return results
+
+
 @router.get("/import/status/{date}", response_model=ImportStatus)
 async def get_import_status(date: str, db: Session = Depends(get_db)):
     """
