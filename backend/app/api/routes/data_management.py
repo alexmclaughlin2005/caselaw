@@ -1020,6 +1020,48 @@ def get_import_logs(lines: int = 100):
         raise HTTPException(status_code=500, detail=f"Failed to read logs: {str(e)}")
 
 
+@router.get("/import-citations-logs")
+def get_citations_import_logs(lines: int = 100):
+    """
+    Get the last N lines from the citations import log file.
+
+    Args:
+        lines: Number of lines to return (default 100, max 1000)
+    """
+    from pathlib import Path
+
+    try:
+        log_path = Path("/app/data/import_citations.log")
+
+        if not log_path.exists():
+            return {
+                "status": "no_log",
+                "message": "Citations import log file does not exist yet. Import may not have started.",
+                "log_path": str(log_path)
+            }
+
+        # Limit lines to prevent huge responses
+        lines = min(lines, 1000)
+
+        # Read last N lines using tail command
+        import subprocess
+        result = subprocess.run(
+            ["tail", f"-{lines}", str(log_path)],
+            capture_output=True,
+            text=True
+        )
+
+        return {
+            "status": "success",
+            "lines": lines,
+            "log_path": str(log_path),
+            "log_content": result.stdout
+        }
+    except Exception as e:
+        logger.error(f"Failed to read citations import logs: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to read logs: {str(e)}")
+
+
 @router.post("/import-citations-parallel")
 def import_citations_parallel():
     """
