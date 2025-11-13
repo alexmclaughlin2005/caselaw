@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     S3_PREFIX: str = "bulk-data/"
 
     # Data directory (Railway volume mount path or local dev)
-    DATA_DIR: str = "/data"  # Railway volume mount point
+    DATA_DIR: str = "/app/data"  # Railway volume mount point
 
     # Logging
     LOG_LEVEL: str = "INFO"
