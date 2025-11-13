@@ -83,14 +83,25 @@ async def get_live_import_status(db: Session = Depends(get_db)):
         else:
             import_status = "pending"
 
+        # Format query details for frontend
+        query_details_formatted = []
+        for q in active_queries:
+            query_details_formatted.append({
+                "pid": q["pid"],
+                "query": q["query_preview"],
+                "state": "active",
+                "duration": f"{q['duration_seconds']}s",
+                "table": q["table"] or "unknown"
+            })
+
         return {
             "import_status": import_status,
             "overall_percentage": overall_percentage,
             "total_records": total_current,
-            "total_expected": total_expected,
+            "expected_total": total_expected,  # Changed from total_expected to expected_total
             "tables": current_counts,
             "active_queries": len(active_queries),
-            "query_details": active_queries,
+            "query_details": query_details_formatted,
             "timestamp": db.execute(text("SELECT NOW()")).scalar().isoformat()
         }
 
