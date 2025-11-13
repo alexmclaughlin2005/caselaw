@@ -29,8 +29,8 @@ class Settings(BaseSettings):
     S3_BUCKET_NAME: str = "com-courtlistener-storage"
     S3_PREFIX: str = "bulk-data/"
 
-    # Data directory
-    DATA_DIR: str = "./data"
+    # Data directory (Railway volume mount path or local dev)
+    DATA_DIR: str = "/data"  # Railway volume mount point
 
     # Logging
     LOG_LEVEL: str = "INFO"

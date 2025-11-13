@@ -447,8 +447,12 @@ async def parallel_import_from_s3(date: str):
         try:
             logger.info(f"[{table_name}] Starting download from S3: {s3_file}")
 
-            # Download from S3
-            target_path = Path(f"/app/data/{table_name}-{date}.csv")
+            # Download from S3 to Railway volume
+            from app.core.config import settings
+            data_dir = Path(settings.DATA_DIR)
+            data_dir.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
+
+            target_path = data_dir / f"{table_name}-{date}.csv"
             downloaded_path = downloader.download_file(
                 key=f"bulk-data/{s3_file}",
                 target_path=target_path
