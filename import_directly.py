@@ -88,9 +88,15 @@ def main():
 
     session = SessionLocal()
 
+    import time
+    overall_start = time.time()
+
     for table_name, s3_file in caselaw_tables:
+        table_start = time.time()
         try:
-            logger.info(f"\n[{table_name}] Starting...")
+            logger.info(f"\n{'='*60}")
+            logger.info(f"[{table_name}] Starting import...")
+            logger.info(f"{'='*60}")
 
             # Check if already downloaded
             csv_path = Path(f"/app/data/{table_name}-{date}.csv")
@@ -106,22 +112,26 @@ def main():
                 logger.info(f"[{table_name}] File already exists at {csv_path}")
                 logger.info(f"[{table_name}] File size: {csv_path.stat().st_size / (1024**3):.2f} GB")
 
-            # Import
-            logger.info(f"[{table_name}] Importing to database...")
+            # Import with detailed progress (data_importer.py now handles progress logging)
+            logger.info(f"[{table_name}] Starting database import...")
             row_count = importer.import_csv(table_name, csv_path, session)
 
-            logger.info(f"[{table_name}] ✓ Complete: {row_count:,} rows")
+            table_elapsed = time.time() - table_start
+            logger.info(f"\n[{table_name}] ✅ TABLE COMPLETE | {row_count:,} rows | Total time: {table_elapsed/60:.1f} minutes")
 
         except Exception as e:
-            logger.error(f"[{table_name}] ERROR: {e}")
+            table_elapsed = time.time() - table_start
+            logger.error(f"[{table_name}] ❌ ERROR after {table_elapsed/60:.1f} minutes: {e}")
             import traceback
             traceback.print_exc()
             continue
 
     session.close()
 
+    overall_elapsed = time.time() - overall_start
     logger.info("\n" + "=" * 80)
-    logger.info("ALL IMPORTS COMPLETE!")
+    logger.info("🎉 ALL CASELAW IMPORTS COMPLETE!")
+    logger.info(f"Total time: {overall_elapsed/3600:.1f} hours ({overall_elapsed/60:.1f} minutes)")
     logger.info("=" * 80)
 
 if __name__ == "__main__":

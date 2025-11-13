@@ -255,7 +255,13 @@ class DataImporter:
             total_rows_imported = 0
             chunk_num = 0
 
+            # Track timing for progress estimation
+            import time
+            start_time = time.time()
+            last_log_time = start_time
+
             logger.info(f"Processing CSV in chunks of {chunk_size} rows using Python csv module")
+            logger.info(f"Starting import at {datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')}")
 
             # Use Python's native csv module which handles multi-line quoted fields correctly
             # CourtListener CSVs have HTML/XML in quoted fields with embedded newlines
@@ -377,11 +383,30 @@ class DataImporter:
                             session.rollback()
                             logger.warning(f"Skipping chunk {chunk_num} due to error: {str(e)[:200]}")
 
+                        # Log progress every 5 chunks (500k rows) for more frequent updates
+                        current_time = time.time()
+                        if chunk_num % 5 == 0:
+                            elapsed = current_time - start_time
+                            rows_per_second = total_rows_imported / elapsed if elapsed > 0 else 0
+                            rows_per_minute = rows_per_second * 60
+
+                            logger.info(f"[{table_name}] Chunk {chunk_num} | {total_rows_imported:,} rows | "
+                                       f"{skipped_rows:,} skipped | Rate: {rows_per_minute:,.0f} rows/min | "
+                                       f"Elapsed: {elapsed/60:.1f}m")
+
                         # Commit every 10 chunks (1M rows) for better progress visibility
                         if chunk_num % 10 == 0:
                             session.commit()
                             current_count = session.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
-                            logger.info(f"Progress: Processed {chunk_num} chunks ({total_rows_imported:,} rows, {skipped_rows:,} skipped) - Database total: {current_count:,}")
+
+                            # Calculate progress metrics
+                            elapsed = time.time() - start_time
+                            rows_per_second = total_rows_imported / elapsed if elapsed > 0 else 0
+                            rows_per_minute = rows_per_second * 60
+
+                            # Log detailed progress with DB count every 10 chunks
+                            logger.info(f"[{table_name}] ✓ Committed chunk {chunk_num} | DB total: {current_count:,} rows | "
+                                       f"Rate: {rows_per_minute:,.0f} rows/min")
 
                         # Reset chunk
                         chunk_rows = []
@@ -413,7 +438,14 @@ class DataImporter:
                 count_after = session.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
                 row_count = count_after - count_before
 
-                logger.info(f"Imported {row_count:,} rows into {table_name} (total: {count_after:,}, skipped {skipped_rows:,} malformed rows)")
+                # Calculate final statistics
+                total_elapsed = time.time() - start_time
+                avg_rows_per_second = total_rows_imported / total_elapsed if total_elapsed > 0 else 0
+                avg_rows_per_minute = avg_rows_per_second * 60
+
+                logger.info(f"[{table_name}] ✅ COMPLETE | {row_count:,} new rows added | "
+                           f"Total in DB: {count_after:,} | Skipped: {skipped_rows:,} | "
+                           f"Time: {total_elapsed/60:.1f}m | Avg rate: {avg_rows_per_minute:,.0f} rows/min")
 
                 return row_count
 
