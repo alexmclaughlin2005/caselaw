@@ -133,14 +133,31 @@ def import_with_copy(table_name: str, csv_path: Path, session):
         return rows_added
 
     except Exception as e:
-        logger.error(f"COPY failed, falling back to standard import: {e}")
+        logger.warning(f"COPY failed (data type mismatch), falling back to optimized INSERT: {e}")
         # Clean up temp table
         try:
             session.execute(text(f"DROP TABLE IF EXISTS {temp_table}"))
             session.commit()
         except:
             pass
-        raise
+
+        # Fall back to our optimized INSERT method (still very fast with FK disabled)
+        logger.info("Using TURBO MODE INSERT (500K chunks, 5M commits, FK checks disabled)")
+
+        from app.services.data_importer import DataImporter
+        importer = DataImporter()
+
+        fallback_start = time.time()
+        row_count = importer.import_csv(table_name, csv_path, session)
+        fallback_elapsed = time.time() - fallback_start
+
+        logger.info(f"=" * 80)
+        logger.info(f"✅ {table_name} COMPLETE (INSERT fallback)")
+        logger.info(f"New rows: {row_count:,}")
+        logger.info(f"Time: {fallback_elapsed/60:.1f}m")
+        logger.info(f"=" * 80)
+
+        return row_count
 
 
 def main():
