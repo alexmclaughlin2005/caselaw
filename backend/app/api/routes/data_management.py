@@ -641,6 +641,7 @@ def import_people_database_sync():
                 # Import
                 logger.info(f"[{table_name}] Starting import to database")
 
+                # Use pandas for both tables to handle CSV format issues
                 if table_name == "people_db_person":
                     logger.info(f"[{table_name}] Using pandas import with self-referential FK handling")
                     row_count = importer.import_csv_pandas(
@@ -649,6 +650,9 @@ def import_people_database_sync():
                         session,
                         skip_self_referential_fk=True
                     )
+                elif table_name == "people_db_court":
+                    logger.info(f"[{table_name}] Using pandas import for court data")
+                    row_count = importer.import_csv_pandas(table_name, downloaded_path, session)
                 else:
                     row_count = importer.import_csv(table_name, downloaded_path, session)
 
