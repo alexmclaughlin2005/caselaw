@@ -1,0 +1,137 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: courtlistener-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-courtlistener}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-courtlistener}
+      POSTGRES_DB: ${POSTGRES_DB:-courtlistener}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # Optimize for bulk imports
+    command: >
+      postgres
+      -c shared_buffers=2GB
+      -c work_mem=256MB
+      -c maintenance_work_mem=1GB
+      -c effective_cache_size=4GB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c max_worker_processes=4
+      -c max_parallel_workers_per_gather=2
+      -c max_parallel_workers=4
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+        reservations:
+          memory: 4G
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-courtlistener}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - courtlistener-network
+
+  # Redis (for Celery)
+  redis:
+    image: redis:7-alpine
+    container_name: courtlistener-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - courtlistener-network
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: courtlistener-backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+    ports:
+      - "${BACKEND_PORT:-8001}:8000"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-courtlistener}:${POSTGRES_PASSWORD:-courtlistener}@postgres:5432/${POSTGRES_DB:-courtlistener}
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - courtlistener-network
+
+  # Celery Worker (for background tasks)
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: courtlistener-celery-worker
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=2
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-courtlistener}:${POSTGRES_PASSWORD:-courtlistener}@postgres:5432/${POSTGRES_DB:-courtlistener}
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=development
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - courtlistener-network
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: courtlistener-frontend
+    command: npm run dev
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8001
+    depends_on:
+      - backend
+    networks:
+      - courtlistener-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  courtlistener-network:
+    driver: bridge
+

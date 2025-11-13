@@ -1,0 +1,3 @@
+# This directory stores downloaded CSV files from CourtListener
+# Files are mounted as a volume in Docker Compose
+
