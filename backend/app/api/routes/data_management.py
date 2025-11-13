@@ -933,35 +933,46 @@ async def get_import_status(date: str, db: Session = Depends(get_db)):
 @router.post("/import-caselaw-background")
 def import_caselaw_background():
     """
-    Start caselaw import as a detached background process.
+    Start caselaw import as a detached background process using nohup.
     This endpoint returns immediately and the import runs independently.
 
     Monitor progress via /api/monitoring/import/live-status
     """
     import subprocess
-    import sys
+    from pathlib import Path
 
     try:
         # Path to the import script
         script_path = "/app/import_directly.py"
+        log_path = "/app/data/import.log"
 
-        # Start the script as a detached background process
-        process = subprocess.Popen(
-            [sys.executable, script_path],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            stdin=subprocess.DEVNULL,
-            start_new_session=True  # Detach from parent process
+        # Verify script exists
+        if not Path(script_path).exists():
+            raise FileNotFoundError(f"Import script not found: {script_path}")
+
+        # Use nohup and shell redirect to truly background the process
+        # This ensures the process survives after the HTTP request completes
+        cmd = f"nohup python3 {script_path} > {log_path} 2>&1 &"
+
+        # Execute via shell to get proper backgrounding
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            capture_output=True,
+            text=True
         )
 
-        logger.info(f"Started caselaw import in background process (PID: {process.pid})")
+        logger.info(f"Started caselaw import with nohup (command: {cmd})")
+        logger.info(f"Logs will be written to: {log_path}")
 
         return {
             "status": "started",
-            "message": "Caselaw import started in background process",
-            "process_id": process.pid,
-            "note": "Monitor progress at /api/monitoring/import/live-status"
+            "message": "Caselaw import started in background with nohup",
+            "log_file": log_path,
+            "note": "Monitor progress at /api/monitoring/import/live-status or check log file"
         }
     except Exception as e:
         logger.error(f"Failed to start background import: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to start import: {str(e)}")
