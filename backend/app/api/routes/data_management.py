@@ -384,6 +384,95 @@ async def start_import(request: ImportRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/import-caselaw-sync")
+def import_caselaw_sync():
+    """
+    SYNCHRONOUS import of caselaw tables - no threading.
+    Uses existing downloaded files if present on volume.
+
+    Run this AFTER import-people-db-sync completes.
+    """
+    from pathlib import Path
+    from app.core.database import SessionLocal
+
+    try:
+        date = "2025-10-31"
+        logger.info("=" * 80)
+        logger.info("SYNCHRONOUS CASELAW IMPORT STARTED")
+        logger.info("=" * 80)
+
+        tables = [
+            ("search_docket", f"dockets-{date}.csv.bz2"),
+            ("search_opinioncluster", f"opinion-clusters-{date}.csv.bz2"),
+            ("search_opinionscited", f"opinions-cited-{date}.csv.bz2"),
+            ("search_parenthetical", f"parentheticals-{date}.csv.bz2"),
+        ]
+
+        session = SessionLocal()
+        results = []
+
+        for table_name, s3_file in tables:
+            try:
+                from app.core.config import settings
+                data_dir = Path(settings.DATA_DIR)
+                data_dir.mkdir(parents=True, exist_ok=True)
+
+                target_path = data_dir / f"{table_name}-{date}.csv"
+
+                # Check if file exists
+                if not target_path.exists():
+                    logger.info(f"[{table_name}] Downloading from S3: {s3_file}")
+                    downloaded_path = downloader.download_file(
+                        key=f"bulk-data/{s3_file}",
+                        target_path=target_path
+                    )
+                    logger.info(f"[{table_name}] Download complete: {downloaded_path.stat().st_size / (1024**3):.2f} GB")
+                else:
+                    logger.info(f"[{table_name}] Using existing file: {target_path}")
+                    logger.info(f"[{table_name}] File size: {target_path.stat().st_size / (1024**3):.2f} GB")
+                    downloaded_path = target_path
+
+                # Import
+                logger.info(f"[{table_name}] Starting import to database")
+                row_count = importer.import_csv(table_name, downloaded_path, session)
+
+                logger.info(f"[{table_name}] ✓ Import complete: {row_count:,} rows")
+                results.append({
+                    "table": table_name,
+                    "status": "success",
+                    "rows": row_count
+                })
+
+            except Exception as e:
+                logger.error(f"[{table_name}] Error: {e}")
+                import traceback
+                traceback.print_exc()
+                results.append({
+                    "table": table_name,
+                    "status": "error",
+                    "error": str(e)
+                })
+
+        session.close()
+
+        logger.info("=" * 80)
+        logger.info("CASELAW IMPORT COMPLETE")
+        logger.info("=" * 80)
+
+        return {
+            "status": "completed",
+            "message": "Caselaw import completed",
+            "date": date,
+            "results": results
+        }
+
+    except Exception as e:
+        logger.error(f"Fatal error in caselaw import: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/import-parallel")
 async def start_parallel_import():
     """
@@ -503,6 +592,101 @@ async def parallel_import_from_s3(date: str):
             logger.error(f"Unexpected result: {result}")
 
     return results
+
+
+@router.post("/import-people-db-sync")
+def import_people_database_sync():
+    """
+    SYNCHRONOUS import of people database tables - no threading.
+    This blocks until complete but provides full logging visibility.
+
+    Run this BEFORE importing caselaw tables.
+    """
+    from pathlib import Path
+    from app.core.database import SessionLocal
+
+    try:
+        date = "2025-10-31"
+        logger.info("=" * 80)
+        logger.info("SYNCHRONOUS PEOPLE DATABASE IMPORT STARTED")
+        logger.info("=" * 80)
+
+        tables = [
+            ("people_db_court", f"courts-{date}.csv.bz2"),
+            ("people_db_person", f"people-db-people-{date}.csv.bz2"),
+        ]
+
+        session = SessionLocal()
+        results = []
+
+        for table_name, s3_file in tables:
+            try:
+                logger.info(f"\n[{table_name}] Starting download from S3: {s3_file}")
+
+                from app.core.config import settings
+                data_dir = Path(settings.DATA_DIR)
+                data_dir.mkdir(parents=True, exist_ok=True)
+
+                target_path = data_dir / f"{table_name}-{date}.csv"
+
+                # Download
+                downloaded_path = downloader.download_file(
+                    key=f"bulk-data/{s3_file}",
+                    target_path=target_path
+                )
+
+                logger.info(f"[{table_name}] Download complete: {downloaded_path}")
+                logger.info(f"[{table_name}] File size: {downloaded_path.stat().st_size / (1024**2):.2f} MB")
+
+                # Import
+                logger.info(f"[{table_name}] Starting import to database")
+
+                if table_name == "people_db_person":
+                    logger.info(f"[{table_name}] Using pandas import with self-referential FK handling")
+                    row_count = importer.import_csv_pandas(
+                        table_name,
+                        downloaded_path,
+                        session,
+                        skip_self_referential_fk=True
+                    )
+                else:
+                    row_count = importer.import_csv(table_name, downloaded_path, session)
+
+                logger.info(f"[{table_name}] ✓ Import complete: {row_count:,} rows")
+                results.append({
+                    "table": table_name,
+                    "status": "success",
+                    "rows": row_count
+                })
+
+            except Exception as e:
+                logger.error(f"[{table_name}] Error: {e}")
+                import traceback
+                traceback.print_exc()
+                results.append({
+                    "table": table_name,
+                    "status": "error",
+                    "error": str(e)
+                })
+
+        session.close()
+
+        logger.info("=" * 80)
+        logger.info("PEOPLE DATABASE IMPORT COMPLETE")
+        logger.info("=" * 80)
+
+        return {
+            "status": "completed",
+            "message": "People database import completed",
+            "date": date,
+            "results": results
+        }
+
+    except Exception as e:
+        logger.error(f"Fatal error in people DB import: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/import-people-db")
