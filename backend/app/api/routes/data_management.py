@@ -435,7 +435,7 @@ async def parallel_import_from_s3(date: str):
             # Download from S3
             target_path = Path(f"/app/data/{table_name}-{date}.csv")
             downloaded_path = downloader.download_file(
-                s3_key=f"bulk-data/{s3_file}",
+                key=f"bulk-data/{s3_file}",
                 target_path=target_path
             )
 
