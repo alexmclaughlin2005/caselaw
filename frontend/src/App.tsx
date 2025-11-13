@@ -1,8 +1,17 @@
+import { Suspense } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
 import DataManagement from './pages/DataManagement'
 import Dockets from './pages/Dockets'
 import Opinions from './pages/Opinions'
 import ImportMonitor from './pages/ImportMonitor'
+
+function LoadingSpinner() {
+  return (
+    <div className="flex items-center justify-center py-12">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+    </div>
+  )
+}
 
 function Navigation() {
   const location = useLocation()
@@ -51,41 +60,43 @@ function App() {
         </header>
         <Navigation />
         <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-          <Routes>
-            <Route path="/" element={
-              <div className="px-4 py-6">
-                <h2 className="text-2xl font-semibold mb-4">Welcome</h2>
-                <p className="text-gray-600 mb-4">
-                  CourtListener Database Browser allows you to download, import, and browse
-                  legal data from CourtListener's bulk data repository.
-                </p>
-                <div className="mt-6 flex gap-4">
-                  <Link
-                    to="/dockets"
-                    className="inline-block bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 transition-colors"
-                  >
-                    Browse Dockets
-                  </Link>
-                  <Link
-                    to="/opinions"
-                    className="inline-block bg-green-600 text-white px-6 py-3 rounded-md hover:bg-green-700 transition-colors"
-                  >
-                    Browse Opinions
-                  </Link>
-                  <Link
-                    to="/data"
-                    className="inline-block bg-gray-600 text-white px-6 py-3 rounded-md hover:bg-gray-700 transition-colors"
-                  >
-                    Data Management
-                  </Link>
+          <Suspense fallback={<LoadingSpinner />}>
+            <Routes>
+              <Route path="/" element={
+                <div className="px-4 py-6">
+                  <h2 className="text-2xl font-semibold mb-4">Welcome</h2>
+                  <p className="text-gray-600 mb-4">
+                    CourtListener Database Browser allows you to download, import, and browse
+                    legal data from CourtListener's bulk data repository.
+                  </p>
+                  <div className="mt-6 flex gap-4">
+                    <Link
+                      to="/dockets"
+                      className="inline-block bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 transition-colors"
+                    >
+                      Browse Dockets
+                    </Link>
+                    <Link
+                      to="/opinions"
+                      className="inline-block bg-green-600 text-white px-6 py-3 rounded-md hover:bg-green-700 transition-colors"
+                    >
+                      Browse Opinions
+                    </Link>
+                    <Link
+                      to="/data"
+                      className="inline-block bg-gray-600 text-white px-6 py-3 rounded-md hover:bg-gray-700 transition-colors"
+                    >
+                      Data Management
+                    </Link>
+                  </div>
                 </div>
-              </div>
-            } />
-            <Route path="/dockets" element={<Dockets />} />
-            <Route path="/opinions" element={<Opinions />} />
-            <Route path="/data" element={<DataManagement />} />
-            <Route path="/monitor" element={<ImportMonitor />} />
-          </Routes>
+              } />
+              <Route path="/dockets" element={<Dockets />} />
+              <Route path="/opinions" element={<Opinions />} />
+              <Route path="/data" element={<DataManagement />} />
+              <Route path="/monitor" element={<ImportMonitor />} />
+            </Routes>
+          </Suspense>
         </main>
       </div>
     </Router>

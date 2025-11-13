@@ -9,6 +9,9 @@ const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: false,
       retry: 1,
+      suspense: false,
+      useErrorBoundary: false,
+      staleTime: 0,
     },
   },
 })
