@@ -3,13 +3,13 @@
  *
  * Real-time monitoring of database import progress
  */
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getImportProgress, getDatabaseCounts, getDatabaseActivity } from '../services/monitoring'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
-import { RefreshCw, Database, Activity, CheckCircle, Clock, TrendingUp } from '../components/icons'
+import { RefreshCw, Database, Activity, Clock, TrendingUp } from '../components/icons'
 
 export default function ImportMonitor() {
   const [autoRefresh, setAutoRefresh] = useState(true)
