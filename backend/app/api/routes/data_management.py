@@ -384,13 +384,115 @@ async def start_import(request: ImportRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/import-parallel")
+async def start_parallel_import(background_tasks: BackgroundTasks):
+    """
+    Start parallel import directly from S3 to Railway database.
+
+    This downloads all 4 tables from S3 and imports them in parallel.
+    Much faster than sequential import or dump/restore.
+    """
+    try:
+        # Use latest date
+        date = "2025-10-31"
+
+        # Add background task for parallel import
+        background_tasks.add_task(parallel_import_from_s3, date)
+
+        return {
+            "status": "started",
+            "message": f"Parallel import from S3 started for date {date}",
+            "date": date,
+            "tables": ["search_docket", "search_opinioncluster", "search_opinionscited", "search_parenthetical"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def parallel_import_from_s3(date: str):
+    """
+    Background task to download and import all tables in parallel from S3.
+    """
+    import asyncio
+    from pathlib import Path
+    from app.core.database import SessionLocal
+
+    logger.info(f"Starting parallel import from S3 for date {date}")
+
+    # Table mappings: (table_name, s3_file_name)
+    tables = [
+        ("search_docket", f"dockets-{date}.csv.bz2"),
+        ("search_opinioncluster", f"opinion-clusters-{date}.csv.bz2"),
+        ("search_opinionscited", f"opinions-cited-{date}.csv.bz2"),
+        ("search_parenthetical", f"parentheticals-{date}.csv.bz2"),
+    ]
+
+    async def download_and_import_table(table_name: str, s3_file: str):
+        """Download and import a single table."""
+        try:
+            logger.info(f"[{table_name}] Starting download from S3: {s3_file}")
+
+            # Download from S3
+            target_path = Path(f"/app/data/{table_name}-{date}.csv")
+            downloaded_path = downloader.download_file(
+                s3_key=f"bulk-data/{s3_file}",
+                target_path=target_path
+            )
+
+            logger.info(f"[{table_name}] Download complete: {downloaded_path}")
+            logger.info(f"[{table_name}] File size: {downloaded_path.stat().st_size / (1024**3):.2f} GB")
+
+            # Import to database
+            logger.info(f"[{table_name}] Starting import to database")
+            session = SessionLocal()
+            try:
+                row_count = importer.import_csv(table_name, downloaded_path, session)
+                logger.info(f"[{table_name}] ✓ Import complete: {row_count:,} rows")
+                return {
+                    "table": table_name,
+                    "status": "success",
+                    "rows": row_count
+                }
+            finally:
+                session.close()
+
+        except Exception as e:
+            logger.error(f"[{table_name}] Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                "table": table_name,
+                "status": "error",
+                "error": str(e)
+            }
+
+    # Run all imports in parallel
+    tasks = [
+        download_and_import_table(table_name, s3_file)
+        for table_name, s3_file in tables
+    ]
+
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    logger.info("=" * 80)
+    logger.info("PARALLEL IMPORT COMPLETE")
+    logger.info("=" * 80)
+    for result in results:
+        if isinstance(result, dict):
+            logger.info(f"{result['table']}: {result['status']}")
+        else:
+            logger.error(f"Unexpected result: {result}")
+
+    return results
+
+
 @router.get("/import/status/{date}", response_model=ImportStatus)
 async def get_import_status(date: str, db: Session = Depends(get_db)):
     """
     Get the status of an import operation.
-    
+
     Checks Celery task status if a task exists, otherwise checks database.
-    
+
     Args:
         date: Date string (YYYY-MM-DD)
         db: Database session
