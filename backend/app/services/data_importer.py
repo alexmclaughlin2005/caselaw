@@ -251,7 +251,7 @@ class DataImporter:
             db_columns = [row[0] for row in table_columns_result]
 
             # Use chunked reading to avoid memory issues with large files
-            chunk_size = 100000  # Process 100k rows at a time (optimized for speed)
+            chunk_size = 500000  # Process 500k rows at a time (optimized for high throughput)
             total_rows_imported = 0
             chunk_num = 0
 
@@ -383,9 +383,9 @@ class DataImporter:
                             session.rollback()
                             logger.warning(f"Skipping chunk {chunk_num} due to error: {str(e)[:200]}")
 
-                        # Log progress every 5 chunks (500k rows) for more frequent updates
+                        # Log progress every 2 chunks (1M rows with 500k chunk size)
                         current_time = time.time()
-                        if chunk_num % 5 == 0:
+                        if chunk_num % 2 == 0:
                             elapsed = current_time - start_time
                             rows_per_second = total_rows_imported / elapsed if elapsed > 0 else 0
                             rows_per_minute = rows_per_second * 60
@@ -394,7 +394,7 @@ class DataImporter:
                                        f"{skipped_rows:,} skipped | Rate: {rows_per_minute:,.0f} rows/min | "
                                        f"Elapsed: {elapsed/60:.1f}m")
 
-                        # Commit every 10 chunks (1M rows) for better progress visibility
+                        # Commit every 10 chunks (5M rows with 500k chunk size) for better throughput
                         if chunk_num % 10 == 0:
                             session.commit()
                             current_count = session.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
