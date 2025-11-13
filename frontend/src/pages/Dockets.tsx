@@ -5,7 +5,7 @@
  */
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { searchDockets, DocketSearchParams } from '../services/dockets'
+import { searchDockets, DocketSearchParams, DocketListItem } from '../services/dockets'
 import { Input } from '../components/ui/input'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -41,7 +41,6 @@ export default function Dockets() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['dockets', searchParams],
     queryFn: () => searchDockets(searchParams),
-    keepPreviousData: true,
   })
 
   const handleSearch = (e: React.FormEvent) => {
@@ -149,7 +148,7 @@ export default function Dockets() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {data.items.map((docket) => (
+                    {data.items.map((docket: DocketListItem) => (
                       <TableRow key={docket.id}>
                         <TableCell className="font-mono text-sm">
                           {docket.docket_number || 'N/A'}
