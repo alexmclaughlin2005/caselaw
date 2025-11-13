@@ -929,3 +929,39 @@ async def get_import_status(date: str, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error checking import status: {str(e)}")
 
+
+@router.post("/import-caselaw-background")
+def import_caselaw_background():
+    """
+    Start caselaw import as a detached background process.
+    This endpoint returns immediately and the import runs independently.
+
+    Monitor progress via /api/monitoring/import/live-status
+    """
+    import subprocess
+    import sys
+
+    try:
+        # Path to the import script
+        script_path = "/app/import_directly.py"
+
+        # Start the script as a detached background process
+        process = subprocess.Popen(
+            [sys.executable, script_path],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True  # Detach from parent process
+        )
+
+        logger.info(f"Started caselaw import in background process (PID: {process.pid})")
+
+        return {
+            "status": "started",
+            "message": "Caselaw import started in background process",
+            "process_id": process.pid,
+            "note": "Monitor progress at /api/monitoring/import/live-status"
+        }
+    except Exception as e:
+        logger.error(f"Failed to start background import: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to start import: {str(e)}")
