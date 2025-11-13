@@ -611,9 +611,17 @@ def import_people_database_sync():
         logger.info("SYNCHRONOUS PEOPLE DATABASE IMPORT STARTED")
         logger.info("=" * 80)
 
+        # All people database tables in import order (respects foreign keys)
         tables = [
             ("people_db_court", f"courts-{date}.csv.bz2"),
             ("people_db_person", f"people-db-people-{date}.csv.bz2"),
+            ("people_db_school", f"people-db-schools-{date}.csv.bz2"),
+            ("people_db_position", f"people-db-positions-{date}.csv.bz2"),
+            ("people_db_education", f"people-db-educations-{date}.csv.bz2"),
+            ("people_db_politicalaffiliation", f"people-db-political-affiliations-{date}.csv.bz2"),
+            ("people_db_race", f"people-db-races-{date}.csv.bz2"),
+            ("people_db_source", f"people-db-sources-{date}.csv.bz2"),
+            ("people_db_retentionevent", f"people-db-retention-events-{date}.csv.bz2"),
         ]
 
         session = SessionLocal()
