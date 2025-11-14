@@ -173,6 +173,16 @@ class ChunkListResponse(BaseModel):
     total_chunks: int
 
 
+class ChunkStartResponse(BaseModel):
+    """Response when chunking starts in background."""
+    status: str
+    message: str
+    table_name: str
+    dataset_date: str
+    csv_filename: str
+    chunk_size: int
+
+
 class ChunkProgressSummary(BaseModel):
     """Summary of chunked import progress."""
     table_name: str

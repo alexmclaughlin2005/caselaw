@@ -14,6 +14,7 @@ from app.api.deps import get_db
 from app.schemas.data_management import (
     ChunkRequest,
     ChunkListResponse,
+    ChunkStartResponse,
     ChunkInfo,
     ChunkProgressSummary,
     ChunkedImportRequest,
@@ -60,22 +61,58 @@ async def check_file_exists_async(file_path: Path, timeout: int = 5) -> bool:
         raise TimeoutError(f"File existence check timed out after {timeout}s for: {file_path}")
 
 
-@router.post("/chunk", response_model=ChunkListResponse)
-async def create_chunks(
-    request: ChunkRequest,
-    db: Session = Depends(get_db)
+def background_chunk_csv(
+    csv_path: Path,
+    table_name: str,
+    dataset_date: str,
+    chunk_size: int
 ):
     """
-    Split a large CSV file into numbered chunks for sequential import.
+    Background task to chunk a CSV file.
 
-    This endpoint chunks a CSV file on disk and creates progress tracking
-    records in the database. The original file is preserved.
+    This runs independently after the HTTP response is sent,
+    avoiding gateway timeouts for large files.
+    """
+    from app.api.deps import SessionLocal
+
+    db = SessionLocal()
+    try:
+        logger.info(f"[BACKGROUND CHUNK] Starting chunking for {table_name} ({csv_path})")
+
+        chunk_files = chunk_manager.chunk_csv(
+            csv_path=csv_path,
+            table_name=table_name,
+            dataset_date=dataset_date,
+            chunk_size=chunk_size,
+            db_session=db
+        )
+
+        logger.info(f"[BACKGROUND CHUNK] Completed chunking for {table_name}: {len(chunk_files)} chunks created")
+
+    except Exception as e:
+        logger.error(f"[BACKGROUND CHUNK] Error chunking {table_name}: {str(e)}", exc_info=True)
+    finally:
+        db.close()
+
+
+@router.post("/chunk", response_model=ChunkStartResponse)
+async def create_chunks(
+    request: ChunkRequest,
+    background_tasks: BackgroundTasks
+):
+    """
+    Start chunking a large CSV file in the background.
+
+    This endpoint validates the file exists and starts the chunking process
+    in the background, returning immediately to avoid gateway timeouts.
+    Use GET /chunks/{table}/{date} to monitor progress.
 
     Args:
         request: ChunkRequest with table name, date, filename, and chunk size
+        background_tasks: FastAPI BackgroundTasks for async processing
 
     Returns:
-        ChunkListResponse with information about created chunks
+        ChunkStartResponse indicating chunking has started
     """
     try:
         logger.info(f"[CHUNK REQUEST] Received request for {request.table_name} - {request.csv_filename}")
@@ -102,43 +139,29 @@ async def create_chunks(
                 detail=f"CSV file not found: {request.csv_filename}"
             )
 
-        logger.info(f"[CHUNK REQUEST] File found, starting chunking for {request.table_name}")
+        logger.info(f"[CHUNK REQUEST] File found, starting background chunking for {request.table_name}")
 
-        # Create chunks (this is blocking - run in executor)
-        loop = asyncio.get_event_loop()
-        chunk_files = await loop.run_in_executor(
-            None,
-            chunk_manager.chunk_csv,
+        # Start chunking in background
+        background_tasks.add_task(
+            background_chunk_csv,
             csv_path,
             request.table_name,
             request.dataset_date,
-            request.chunk_size,
-            db
+            request.chunk_size
         )
 
-        logger.info(f"[CHUNK REQUEST] Created {len(chunk_files)} chunks")
-
-        # Get chunk information
-        chunks = chunk_manager.get_chunks(
+        return ChunkStartResponse(
+            status="started",
+            message=f"Chunking started in background for {request.table_name}. "
+                    f"Use GET /api/chunks/chunks/{request.table_name}/{request.dataset_date} to monitor progress.",
             table_name=request.table_name,
             dataset_date=request.dataset_date,
-            db_session=db
-        )
-
-        logger.info(f"[CHUNK REQUEST] Returning {len(chunks)} chunk records")
-
-        return ChunkListResponse(
-            table_name=request.table_name,
-            dataset_date=request.dataset_date,
-            chunks=[ChunkInfo(**chunk) for chunk in chunks],
-            total_chunks=len(chunks)
+            csv_filename=request.csv_filename,
+            chunk_size=request.chunk_size
         )
 
     except HTTPException:
         raise
-    except FileNotFoundError as e:
-        logger.error(f"[CHUNK REQUEST] File not found error: {str(e)}")
-        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"[CHUNK REQUEST] Unexpected error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
