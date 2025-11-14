@@ -18,6 +18,7 @@ from app.models.docket import Docket
 from app.models.opinion_cluster import OpinionCluster
 from app.models.citation import Citation
 from app.models.parenthetical import Parenthetical
+from app.models.csv_chunk_progress import CSVChunkProgress
 
 __all__ = [
     "Base",
@@ -33,5 +34,6 @@ __all__ = [
     "OpinionCluster",
     "Citation",
     "Parenthetical",
+    "CSVChunkProgress",
 ]
 

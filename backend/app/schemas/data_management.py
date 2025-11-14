@@ -138,3 +138,91 @@ class ImportProgressResponse(BaseModel):
     search_opinionscited: TableImportProgress
     search_parenthetical: TableImportProgress
 
+
+# ============================================================================
+# CSV Chunk Management Schemas
+# ============================================================================
+
+class ChunkRequest(BaseModel):
+    """Request to chunk a CSV file."""
+    table_name: str = Field(..., description="Name of the database table")
+    dataset_date: str = Field(..., description="Date string (YYYY-MM-DD) of the dataset")
+    csv_filename: str = Field(..., description="Name of the CSV file to chunk")
+    chunk_size: int = Field(1_000_000, description="Number of rows per chunk", ge=10_000, le=10_000_000)
+
+
+class ChunkInfo(BaseModel):
+    """Information about a single chunk."""
+    chunk_number: int
+    chunk_filename: str
+    status: str  # 'pending', 'processing', 'completed', 'failed', 'skipped'
+    chunk_row_count: Optional[int] = None
+    rows_imported: Optional[int] = None
+    rows_skipped: Optional[int] = None
+    duration_seconds: Optional[int] = None
+    error_message: Optional[str] = None
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+
+
+class ChunkListResponse(BaseModel):
+    """Response containing list of chunks."""
+    table_name: str
+    dataset_date: str
+    chunks: List[ChunkInfo]
+    total_chunks: int
+
+
+class ChunkProgressSummary(BaseModel):
+    """Summary of chunked import progress."""
+    table_name: str
+    dataset_date: str
+    total_chunks: int
+    completed_chunks: int
+    failed_chunks: int
+    processing_chunks: int
+    pending_chunks: int
+    total_rows: int
+    imported_rows: int
+    skipped_rows: int
+    progress_percentage: float = Field(ge=0.0, le=100.0)
+    status: str  # 'not_started', 'pending', 'in_progress', 'processing', 'completed', 'failed'
+
+
+class ChunkedImportRequest(BaseModel):
+    """Request to import data using chunks."""
+    table_name: str = Field(..., description="Name of the database table")
+    dataset_date: str = Field(..., description="Date string (YYYY-MM-DD) of the dataset")
+    import_method: str = Field("standard", description="Import method: 'standard', 'pandas', or 'copy'")
+    resume: bool = Field(True, description="If true, resume from last successful chunk")
+    max_retries: int = Field(3, description="Maximum retry attempts per chunk", ge=1, le=10)
+
+
+class ChunkedImportResponse(BaseModel):
+    """Response from chunked import operation."""
+    table_name: str
+    dataset_date: str
+    total_chunks: int
+    processed_chunks: int
+    successful_chunks: int
+    failed_chunks: int
+    skipped_chunks: int
+    total_rows_imported: int
+    total_rows_skipped: int
+    import_method: str
+    errors: List[Dict] = Field(default_factory=list)
+    status: str  # 'completed', 'partial', 'failed'
+
+
+class ChunkResetRequest(BaseModel):
+    """Request to reset chunk progress."""
+    table_name: str = Field(..., description="Name of the database table")
+    dataset_date: str = Field(..., description="Date string (YYYY-MM-DD) of the dataset")
+
+
+class ChunkDeleteRequest(BaseModel):
+    """Request to delete chunks."""
+    table_name: str = Field(..., description="Name of the database table")
+    dataset_date: str = Field(..., description="Date string (YYYY-MM-DD) of the dataset")
+    delete_files: bool = Field(True, description="If true, also delete chunk files from disk")
+

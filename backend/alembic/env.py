@@ -19,6 +19,7 @@ from app.models import (
     PoliticalAffiliation,
     Race,
     Source,
+    CSVChunkProgress,
 )
 
 # this is the Alembic Config object, which provides
