@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from pathlib import Path
 import logging
+import asyncio
+import os
 
 from app.api.deps import get_db
 from app.schemas.data_management import (
@@ -30,6 +32,34 @@ router = APIRouter()
 chunk_manager = CSVChunkManager()
 
 
+async def check_file_exists_async(file_path: Path, timeout: int = 5) -> bool:
+    """
+    Check if file exists with timeout to prevent hanging on slow I/O.
+
+    Args:
+        file_path: Path to check
+        timeout: Timeout in seconds (default 5)
+
+    Returns:
+        True if file exists, False otherwise
+
+    Raises:
+        TimeoutError: If check takes longer than timeout
+    """
+    def _check():
+        return os.path.exists(str(file_path))
+
+    try:
+        loop = asyncio.get_event_loop()
+        result = await asyncio.wait_for(
+            loop.run_in_executor(None, _check),
+            timeout=timeout
+        )
+        return result
+    except asyncio.TimeoutError:
+        raise TimeoutError(f"File existence check timed out after {timeout}s for: {file_path}")
+
+
 @router.post("/chunk", response_model=ChunkListResponse)
 async def create_chunks(
     request: ChunkRequest,
@@ -48,25 +78,45 @@ async def create_chunks(
         ChunkListResponse with information about created chunks
     """
     try:
+        logger.info(f"[CHUNK REQUEST] Received request for {request.table_name} - {request.csv_filename}")
+
         # Construct CSV path
         csv_path = Path(settings.DATA_DIR) / request.csv_filename
+        logger.info(f"[CHUNK REQUEST] Checking file existence: {csv_path}")
 
-        if not csv_path.exists():
+        # Check file exists with timeout to prevent hanging
+        try:
+            file_exists = await check_file_exists_async(csv_path, timeout=5)
+        except TimeoutError as e:
+            logger.error(f"[CHUNK REQUEST] File check timed out: {str(e)}")
+            raise HTTPException(
+                status_code=504,
+                detail=f"File system timeout while checking for {request.csv_filename}. "
+                       f"Railway volume may be experiencing I/O issues."
+            )
+
+        if not file_exists:
+            logger.warning(f"[CHUNK REQUEST] File not found: {csv_path}")
             raise HTTPException(
                 status_code=404,
                 detail=f"CSV file not found: {request.csv_filename}"
             )
 
-        logger.info(f"Chunking {request.csv_filename} for table {request.table_name}")
+        logger.info(f"[CHUNK REQUEST] File found, starting chunking for {request.table_name}")
 
-        # Create chunks
-        chunk_files = chunk_manager.chunk_csv(
-            csv_path=csv_path,
-            table_name=request.table_name,
-            dataset_date=request.dataset_date,
-            chunk_size=request.chunk_size,
-            db_session=db
+        # Create chunks (this is blocking - run in executor)
+        loop = asyncio.get_event_loop()
+        chunk_files = await loop.run_in_executor(
+            None,
+            chunk_manager.chunk_csv,
+            csv_path,
+            request.table_name,
+            request.dataset_date,
+            request.chunk_size,
+            db
         )
+
+        logger.info(f"[CHUNK REQUEST] Created {len(chunk_files)} chunks")
 
         # Get chunk information
         chunks = chunk_manager.get_chunks(
@@ -75,6 +125,8 @@ async def create_chunks(
             db_session=db
         )
 
+        logger.info(f"[CHUNK REQUEST] Returning {len(chunks)} chunk records")
+
         return ChunkListResponse(
             table_name=request.table_name,
             dataset_date=request.dataset_date,
@@ -82,10 +134,13 @@ async def create_chunks(
             total_chunks=len(chunks)
         )
 
+    except HTTPException:
+        raise
     except FileNotFoundError as e:
+        logger.error(f"[CHUNK REQUEST] File not found error: {str(e)}")
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        logger.error(f"Error creating chunks: {str(e)}")
+        logger.error(f"[CHUNK REQUEST] Unexpected error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
