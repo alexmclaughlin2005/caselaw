@@ -77,7 +77,14 @@ def background_chunk_csv(
 
     db = SessionLocal()
     try:
-        logger.info(f"[BACKGROUND CHUNK] Starting chunking for {table_name} ({csv_path})")
+        logger.info(f"[BACKGROUND CHUNK] Starting chunking task for {table_name} ({csv_path})")
+
+        # Validate file exists
+        if not os.path.exists(csv_path):
+            logger.error(f"[BACKGROUND CHUNK] File not found: {csv_path}")
+            return
+
+        logger.info(f"[BACKGROUND CHUNK] File found, beginning chunking...")
 
         chunk_files = chunk_manager.chunk_csv(
             csv_path=csv_path,
@@ -103,8 +110,9 @@ async def create_chunks(
     """
     Start chunking a large CSV file in the background.
 
-    This endpoint validates the file exists and starts the chunking process
-    in the background, returning immediately to avoid gateway timeouts.
+    This endpoint starts the chunking process in the background and returns
+    immediately to avoid gateway timeouts. The background task will validate
+    the file exists before chunking.
     Use GET /chunks/{table}/{date} to monitor progress.
 
     Args:
@@ -119,29 +127,8 @@ async def create_chunks(
 
         # Construct CSV path
         csv_path = Path(settings.DATA_DIR) / request.csv_filename
-        logger.info(f"[CHUNK REQUEST] Checking file existence: {csv_path}")
 
-        # Check file exists with timeout to prevent hanging
-        try:
-            file_exists = await check_file_exists_async(csv_path, timeout=5)
-        except TimeoutError as e:
-            logger.error(f"[CHUNK REQUEST] File check timed out: {str(e)}")
-            raise HTTPException(
-                status_code=504,
-                detail=f"File system timeout while checking for {request.csv_filename}. "
-                       f"Railway volume may be experiencing I/O issues."
-            )
-
-        if not file_exists:
-            logger.warning(f"[CHUNK REQUEST] File not found: {csv_path}")
-            raise HTTPException(
-                status_code=404,
-                detail=f"CSV file not found: {request.csv_filename}"
-            )
-
-        logger.info(f"[CHUNK REQUEST] File found, starting background chunking for {request.table_name}")
-
-        # Start chunking in background
+        # Start chunking in background (file validation happens there)
         background_tasks.add_task(
             background_chunk_csv,
             csv_path,
@@ -150,9 +137,11 @@ async def create_chunks(
             request.chunk_size
         )
 
+        logger.info(f"[CHUNK REQUEST] Background task queued for {request.table_name}")
+
         return ChunkStartResponse(
             status="started",
-            message=f"Chunking started in background for {request.table_name}. "
+            message=f"Chunking task queued for {request.table_name}. "
                     f"Use GET /api/chunks/chunks/{request.table_name}/{request.dataset_date} to monitor progress.",
             table_name=request.table_name,
             dataset_date=request.dataset_date,
@@ -160,8 +149,6 @@ async def create_chunks(
             chunk_size=request.chunk_size
         )
 
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"[CHUNK REQUEST] Unexpected error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
