@@ -73,7 +73,7 @@ def background_chunk_csv(
     This runs independently after the HTTP response is sent,
     avoiding gateway timeouts for large files.
     """
-    from app.api.deps import SessionLocal
+    from app.core.database import SessionLocal
 
     db = SessionLocal()
     try:
